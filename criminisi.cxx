@@ -1,10 +1,12 @@
 #include "criminisi.h"
 
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 #include <vector>
 #include <iostream>
 #include <algorithm>
+#include <numeric>
 
 /*****************************************************************************/
 
@@ -32,16 +34,59 @@ cv::Mat Criminisi::generate (void)
     cv::Sobel (_original, _dy, -1, 0, 1);
     
     generate_contour();
-    _modified = _original.clone();
+    _modified = _original.clone().setTo (cv::Vec3b (0, 0, 0),
+                                         _mask);
     
     generate_priority();
         
-    while (_contour.size()) {
+    while (_pq.size()) {
     
+        const std::pair<int, int>& point = _pq.top().second;
+        const cv::Point p (point.first, point.second);
+        
+        const auto& phi_p = patch (p, _modified);
+        
+        cv::Mat templateMask = (phi_p != 0.0);
+        cv::cvtColor (templateMask, templateMask, cv::COLOR_BGR2GRAY);
+        templateMask = (templateMask != 0);
+        cv::Mat mergeArrays[3] = {templateMask, templateMask, templateMask};
+        cv::merge(mergeArrays, 3, templateMask);
+        
+        cv::Mat res;
+        cv::matchTemplate (_modified, phi_p, res, CV_TM_SQDIFF, templateMask);
+        
+        cv::Mat dilatedMask;
+        
+        cv::dilate (_mask, dilatedMask, cv::Mat(), cv::Point (-1, -1), _radius);
+        
+        res.setTo (std::numeric_limits<float>::max(),
+                   dilatedMask (cv::Range (0, res.rows),
+                                cv::Range (0, res.cols)));
+        
+        cv::Point q;
+        cv::minMaxLoc(res, NULL, NULL, &q);
+        
+        const int dx = p.x - std::max (p.x - _radius, 0);
+        const int dy = p.y - std::max (p.y - _radius, 0);
+        
+        const auto& phi_q = patch (q + cv::Point (dx, dy),
+                                    _modified);
+        
+//         cv::Mat p1, q1, t1;
+//         cv::resize (phi_p, p1, cv::Size (100, 100));
+//         cv::resize (phi_q, q1, cv::Size (100, 100));
+//         cv::resize (templateMask, t1, cv::Size (100, 100));
+//         
+//         cv::namedWindow ("phi_p : ");
+//         cv::namedWindow ("phi_q : ");
+//         cv::imshow ("phi_p : ", p1);
+//         cv::imshow ("phi_q : ", q1);
+//         cv::imshow ("t1 : ", t1);
+        
         break;
     }
     
-    return cv::Mat();
+    return _modified;
 }
 
 /*****************************************************************************/
@@ -191,8 +236,8 @@ cv::Mat Criminisi::patch (const cv::Point& p, const cv::Mat& img)
     const int x_begin = std::max (p.x - _radius, 0);
     const int y_begin = std::max (p.y - _radius, 0);
     
-    const int x_end = std::min (p.x + _radius, _cols + 1);
-    const int y_end = std::min (p.y + _radius, _rows + 1);
+    const int x_end = std::min (p.x + _radius + 1, _cols + 1);
+    const int y_end = std::min (p.y + _radius + 1, _rows + 1);
     
     return img  (cv::Range (y_begin, y_end),
                  cv::Range (x_begin, x_end));
