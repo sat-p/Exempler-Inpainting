@@ -5,8 +5,7 @@
 #include <vector>
 #include <set>
 #include <utility>
-#include <queue>
-#include <functional>
+#include <map>
 
 class Criminisi
 {
@@ -38,7 +37,9 @@ private:
     cv::Point2d generate_normal (const int x_begin, const int y_begin,
                                  const int x_end,   const int y_end);
     
-    void update_contour (void);
+    void update_contour (const cv::Point& p);
+    
+    double priority (const std::pair<int, int>& p);
     
 private:
     cv::Mat patch (const cv::Point& p, const cv::Mat& img);
@@ -56,7 +57,8 @@ protected:
 protected:
     std::set<std::pair<int, int>> _contour;
     
-    std::priority_queue<std::pair<double, std::pair<int, int>>> _pq;
+    std::set<std::pair<double, std::pair<int, int>>> _pq;
+    std::map<std::pair<int, int>, double> _map;
     
 protected:
     int _rows;

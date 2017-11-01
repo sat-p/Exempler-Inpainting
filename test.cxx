@@ -2,6 +2,7 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include <iostream>
 
@@ -14,7 +15,9 @@ int main (int argc, char** argv)
     }
 
     const auto& ref = cv::imread (argv[1]);
-
+    cv::Mat lab_img;
+    cv::cvtColor (ref, lab_img, CV_BGR2Lab);
+    
     const int N_ref = ref.rows * ref.cols;
     
     if (!N_ref) {
@@ -26,29 +29,28 @@ int main (int argc, char** argv)
         return -1;
     }
     
-    Criminisi criminisi (ref);
+    Criminisi criminisi (lab_img);
     
-    const int x_size = ref.cols / 3;
-    const int y_size = ref.rows / 3;
+    const int x_size = ref.cols / 5;
+    const int y_size = ref.rows / 5;
     
     cv::Mat mask = cv::Mat::zeros (ref.rows, ref.cols, CV_8UC1);
-    cv::Mat roi = mask (cv::Rect ((ref.cols - x_size) / 2,
-                                  (ref.rows - y_size) / 2,
+    cv::Mat roi = mask (cv::Rect ((4 * ref.cols - x_size) / 6,
+                                  (2 * ref.rows - y_size) / 4,
                                   x_size,
                                   y_size));
     roi.setTo (255);
     
     criminisi.mask (mask);
-    const auto& res = criminisi.generate();
+    const auto& res_lab = criminisi.generate();
+    cv::Mat res;
+    
+    cv::cvtColor (res_lab, res, CV_Lab2BGR);
     
     cv::imshow ("ref", ref);
-    cv::imshow ("mask", mask);
-//     cv::imshow ("res", res);
-    
-    cv::Mat mask2 = cv::Mat::zeros (ref.rows, ref.cols, CV_8UC1);
-    
-    criminisi.draw_contour (mask2, 255);
-    cv::imshow ("contour", mask2);
+//     cv::imshow ("mask", mask);
+    cv::imshow ("res", res);
+
     
     std::cout << "Press 'q' to exit" << std::endl;
     
