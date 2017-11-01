@@ -88,6 +88,7 @@ cv::Mat Criminisi::generate (void)
         update_contour (p);
         
         cv::imshow ("modified", _modified);
+        cv::imshow ("confidence", _confidence);
         cv::waitKey (50);
     }
     
@@ -209,7 +210,6 @@ cv::Point2d Criminisi::generate_normal (const cv::Point& p, const int radius)
         slope = 0;
     }
     
-    
     slope = sol.at<float> (0);
     cv::Point2d normal (-slope, 1);
     
@@ -284,69 +284,47 @@ void Criminisi::update_contour (const cv::Point& p)
 
 /*****************************************************************************/ 
 
-std::string type2str(int type) {
-  std::string r;
-
-  uchar depth = type & CV_MAT_DEPTH_MASK;
-  uchar chans = 1 + (type >> CV_CN_SHIFT);
-
-  switch ( depth ) {
-    case CV_8U:  r = "8U"; break;
-    case CV_8S:  r = "8S"; break;
-    case CV_16U: r = "16U"; break;
-    case CV_16S: r = "16S"; break;
-    case CV_32S: r = "32S"; break;
-    case CV_32F: r = "32F"; break;
-    case CV_64F: r = "64F"; break;
-    default:     r = "User"; break;
-  }
-
-  r += "C";
-  r += (chans+'0');
-
-  return r;
-}
-
 double Criminisi::priority (const std::pair<int, int>& p)
 {
     const cv::Point& point = cv::Point (p.first, p.second);
     
     const cv::Mat& confidencePatch = patch (point,
-                                            _mask);
-    
-    double confidence = cv::sum (confidencePatch)[0] /
-                        confidencePatch.total();
-    
+                                            _confidence);
     const int radius = (confidencePatch.rows - 1) / 2;
+    const cv::Mat& p_mask = patch (point, _mask, radius);
+    
+    cv::Mat maskedConfidence = cv::Mat::zeros (confidencePatch.size(), CV_64FC1);
+    confidencePatch.copyTo (maskedConfidence, p_mask == 0);
+    
+    double confidence = cv::sum (maskedConfidence)[0] /
+                        confidencePatch.total();
     
     const cv::Point2f& normal = generate_normal (point, radius);
     
-    const cv::Mat& p_mask = patch (point, _mask, radius);
     const cv::Mat& phi_p = patch (point, _modified, radius);
     
+    cv::Mat gray;
+    cv::cvtColor (phi_p, gray, cv::COLOR_RGB2GRAY);
     cv::Mat dx, dy, magnitude;
-    cv::Sobel (phi_p, dx, CV_64F, 1, 0);
-    cv::Sobel (phi_p, dy, CV_64F, 0, 1);
+    cv::Sobel (gray, dx, CV_64F, 1, 0);
+    cv::Sobel (gray, dy, CV_64F, 0, 1);
     
     cv::magnitude (dx, dy, magnitude);
+    magnitude.setTo (0, p_mask);
     
-    cv::Mat norm (magnitude.size(), CV_64FC1);
+    cv::Mat erodedMagnitude;
+    cv::erode (magnitude, erodedMagnitude, cv::Mat());
     
-    for (int i = 0; i < magnitude.cols; ++i)
-        for (int j = 0; j < magnitude.rows; ++j)
-            norm.at<double> (j, i) = cv::norm (magnitude.at<cv::Vec3b> (j, i));
-    norm.setTo (0, p_mask);
-        
     cv::Point maxPoint;
 
-    cv::minMaxLoc (norm, NULL, NULL, NULL, &maxPoint);
+    cv::minMaxLoc (erodedMagnitude, NULL, NULL, NULL, &maxPoint);
         
-    const cv::Vec3d& dx_ = dx.at<cv::Vec3b> (maxPoint);
-    const cv::Vec3d& dy_ = dy.at<cv::Vec3b> (maxPoint);
+    const double dx_ = dx.at<double> (maxPoint);
+    const double dy_ = dy.at<double> (maxPoint);
     
-    const cv::Vec3d& dot = dy_ * normal.x - dx_ * normal.y;
+    const double dot = -dy_ * normal.x + dx_ * normal.y;
     
-    return confidence * cv::norm (dot);
+    return confidence * std::abs (dot);
 }
 
 /*****************************************************************************/ 
