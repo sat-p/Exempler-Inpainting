@@ -31,12 +31,12 @@ int main (int argc, char** argv)
     
     Criminisi criminisi (lab_img);
     
-    const int x_size = ref.cols / 5;
-    const int y_size = ref.rows / 5;
+    const int x_size = ref.cols / 3;
+    const int y_size = ref.rows / 3;
     
     cv::Mat mask = cv::Mat::zeros (ref.rows, ref.cols, CV_8UC1);
-    cv::Mat roi = mask (cv::Rect ((4 * ref.cols - x_size) / 6,
-                                  (2 * ref.rows - y_size) / 4,
+    cv::Mat roi = mask (cv::Rect ((ref.cols - x_size) / 2,
+                                  (ref.rows - y_size) / 2,
                                   x_size,
                                   y_size));
     roi.setTo (255);

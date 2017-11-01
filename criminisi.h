@@ -43,6 +43,7 @@ private:
     
 private:
     cv::Mat patch (const cv::Point& p, const cv::Mat& img);
+    cv::Mat patch (const cv::Point& p, const cv::Mat& img, const int radius);
     
 protected:
     cv::Mat _original;
