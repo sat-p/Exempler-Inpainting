@@ -1,6 +1,7 @@
 #include "criminisi.h"
 
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 #include <vector>
 #include <iostream>
@@ -30,9 +31,6 @@ Criminisi::Criminisi (cv::Mat&& image, const int window_radius) :
 
 cv::Mat Criminisi::generate (void)
 {
-    cv::Sobel (_original, _dx, -1, 1, 0);
-    cv::Sobel (_original, _dy, -1, 0, 1);
-    
     generate_contour();
     _modified = _original.clone().setTo (cv::Vec3b (0, 0, 0),
                                          _mask);
@@ -70,6 +68,14 @@ cv::Mat Criminisi::generate (void)
         q = q + cv::Point (radius, radius);
         
         const auto& phi_q = patch (q, _modified, radius);
+        
+        cv::Mat PHI_p, PHI_q;
+        cv::resize (phi_p, PHI_p, cv::Size (100, 100));
+        cv::resize (phi_q, PHI_q, cv::Size (100, 100));
+        
+        cv::imshow ("phi_p", PHI_p);
+        cv::imshow ("phi_q", PHI_q);
+        
         phi_q.copyTo (phi_p, p_mask);
         
         cv::Mat confidencePatch = patch (p, _confidence);
@@ -80,9 +86,10 @@ cv::Mat Criminisi::generate (void)
         p_mask.setTo (0);
         
         update_contour (p);
+        
+        cv::imshow ("modified", _modified);
+        cv::waitKey (50);
     }
-    
-    assert (cv::countNonZero (_mask) == 0);
     
     std::cerr << "Completed" << std::endl;
     
@@ -160,14 +167,13 @@ void Criminisi::generate_priority (void)
 
 /*****************************************************************************/
 
-cv::Point2d Criminisi::generate_normal (const int x_begin, const int y_begin,
-                                        const int x_end,   const int y_end)
+cv::Point2d Criminisi::generate_normal (const cv::Point& p, const int radius)
 {
     std::vector<double> X;
     std::vector<double> Y;
     
-    for (int i = x_begin; i <= x_end; ++i) {
-        for (int j = y_begin; j <= y_end; ++j) {
+    for (int i = p.x - radius; i <= p.x + radius; ++i) {
+        for (int j = p.y - radius; j <= p.y + radius; ++j) {
             if (_contour.count (std::make_pair (i, j))) {
             
                 X.push_back (i);
@@ -194,12 +200,17 @@ cv::Point2d Criminisi::generate_normal (const int x_begin, const int y_begin,
     }
     
     cv::Mat sol;
+    float slope;
     
-    cv::solve (X_, Y_, sol, cv::DECOMP_SVD);
+    try {
+        cv::solve (X_, Y_, sol, cv::DECOMP_SVD);
+    }
+    catch (...) {
+        slope = 0;
+    }
     
-    assert (sol.type() == CV_64F);
     
-    const float slope = sol.at<float> (0);
+    slope = sol.at<float> (0);
     cv::Point2d normal (-slope, 1);
     
     if (std::isnan (slope))
@@ -273,27 +284,67 @@ void Criminisi::update_contour (const cv::Point& p)
 
 /*****************************************************************************/ 
 
+std::string type2str(int type) {
+  std::string r;
+
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+  switch ( depth ) {
+    case CV_8U:  r = "8U"; break;
+    case CV_8S:  r = "8S"; break;
+    case CV_16U: r = "16U"; break;
+    case CV_16S: r = "16S"; break;
+    case CV_32S: r = "32S"; break;
+    case CV_32F: r = "32F"; break;
+    case CV_64F: r = "64F"; break;
+    default:     r = "User"; break;
+  }
+
+  r += "C";
+  r += (chans+'0');
+
+  return r;
+}
+
 double Criminisi::priority (const std::pair<int, int>& p)
 {
-    const cv::Mat& confidencePatch = patch (cv::Point (p.first, p.second),
-                                            _mask);
+    const cv::Point& point = cv::Point (p.first, p.second);
     
-    assert (confidencePatch.total());
+    const cv::Mat& confidencePatch = patch (point,
+                                            _mask);
     
     double confidence = cv::sum (confidencePatch)[0] /
                         confidencePatch.total();
-                        
-    const int x_begin = std::max (p.first - _radius, 0);
-    const int y_begin = std::max (p.second - _radius, 0);
-    const int x_end = x_begin + confidencePatch.cols;
-    const int y_end = y_begin + confidencePatch.rows;
     
-    const auto& normal = generate_normal (x_begin, y_begin, x_end, y_end);
+    const int radius = (confidencePatch.rows - 1) / 2;
     
-    const cv::Vec3d& dx = _dx.at<cv::Vec3b> (p.second, p.first);
-    const cv::Vec3d& dy = _dy.at<cv::Vec3b> (p.second, p.first);
+    const cv::Point2f& normal = generate_normal (point, radius);
     
-    const cv::Vec3d& dot = dx * normal.x + dy * normal.y;
+    const cv::Mat& p_mask = patch (point, _mask, radius);
+    const cv::Mat& phi_p = patch (point, _modified, radius);
+    
+    cv::Mat dx, dy, magnitude;
+    cv::Sobel (phi_p, dx, CV_64F, 1, 0);
+    cv::Sobel (phi_p, dy, CV_64F, 0, 1);
+    
+    cv::magnitude (dx, dy, magnitude);
+    
+    cv::Mat norm (magnitude.size(), CV_64FC1);
+    
+    for (int i = 0; i < magnitude.cols; ++i)
+        for (int j = 0; j < magnitude.rows; ++j)
+            norm.at<double> (j, i) = cv::norm (magnitude.at<cv::Vec3b> (j, i));
+    norm.setTo (0, p_mask);
+        
+    cv::Point maxPoint;
+
+    cv::minMaxLoc (norm, NULL, NULL, NULL, &maxPoint);
+        
+    const cv::Vec3d& dx_ = dx.at<cv::Vec3b> (maxPoint);
+    const cv::Vec3d& dy_ = dy.at<cv::Vec3b> (maxPoint);
+    
+    const cv::Vec3d& dot = dy_ * normal.x - dx_ * normal.y;
     
     return confidence * cv::norm (dot);
 }

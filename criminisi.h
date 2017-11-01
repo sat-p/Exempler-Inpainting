@@ -34,8 +34,7 @@ private:
     void generate_contour (void);
     void generate_priority (void);
     
-    cv::Point2d generate_normal (const int x_begin, const int y_begin,
-                                 const int x_end,   const int y_end);
+    cv::Point2d generate_normal (const cv::Point& p, int radius);
     
     void update_contour (const cv::Point& p);
     
@@ -52,8 +51,9 @@ protected:
     
     cv::Mat _confidence;
     
-    cv::Mat _dx;
-    cv::Mat _dy;
+//     cv::Mat _dx;
+//     cv::Mat _dy;
+//     cv::Mat _magnitude;
     
 protected:
     std::set<std::pair<int, int>> _contour;
