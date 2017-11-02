@@ -5,9 +5,13 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include <iostream>
+#include <chrono>
 
 int main (int argc, char** argv)
 {
+    std::chrono::steady_clock clk;
+    auto begin = clk.now();
+    
     if (argc != 2) {
     
         std::cout << "Please input reference image path" << std::endl;
@@ -50,7 +54,9 @@ int main (int argc, char** argv)
     cv::imshow ("ref", ref);
 //     cv::imshow ("mask", mask);
     cv::imshow ("res", res);
-
+    
+    auto time = std::chrono::duration_cast<std::chrono::milliseconds> (clk.now() - begin);
+    std::cerr << "time : " << time.count() << std::endl;
     
     std::cout << "Press 'q' to exit" << std::endl;
     
