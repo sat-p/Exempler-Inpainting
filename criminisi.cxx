@@ -107,8 +107,8 @@ cv::Mat Criminisi::generate (void)
         const auto& phi_q = patch (q, _modified, radius);
         
 //         cv::Mat PHI_p, PHI_q;
-//         cv::resSSDize (phi_p, PHI_p, cv::Size (100, 100));
-//         cv::resSSDize (phi_q, PHI_q, cv::Size (100, 100));
+//         cv::resize (phi_p, PHI_p, cv::Size (100, 100));
+//         cv::resize (phi_q, PHI_q, cv::Size (100, 100));
 //         
 //         cv::imshow ("phi_p", PHI_p);
 //         cv::imshow ("phi_q", PHI_q);
@@ -325,8 +325,7 @@ double Criminisi::priority (const std::pair<int, int>& p)
 {
     const cv::Point& point = cv::Point (p.first, p.second);
     
-    const cv::Mat& confPatch = patch (point,
-                                            _confidence);
+    const cv::Mat& confPatch = patch (point, _confidence);
     const int radius = (confPatch.rows - 1) / 2;
     const cv::Mat& pMask = patch (point, _mask, radius);
     
