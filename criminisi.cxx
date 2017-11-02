@@ -15,7 +15,9 @@ Criminisi::Criminisi (const cv::Mat& image, const int window_radius) :
     _original (image),
     _rows     (image.rows),
     _cols     (image.cols),
-    _radius   (window_radius)
+    _radius   (window_radius),
+    _w        (DEFAULT_W),
+    _delta    (DEFAULT_DELTA)
 {}
 
 /*****************************************************************************/
@@ -24,7 +26,9 @@ Criminisi::Criminisi (cv::Mat&& image, const int window_radius) :
     _original (image),
     _rows     (image.rows),
     _cols     (image.cols),
-    _radius   (window_radius)
+    _radius   (window_radius),
+    _w        (DEFAULT_W),
+    _delta    (DEFAULT_DELTA)
 {}
 
 /*****************************************************************************/
@@ -37,26 +41,51 @@ cv::Mat Criminisi::generate (void)
     
     generate_priority();
     
-    while (_pq.size()) {
+    cv::Mat res;
     
+    while (_pq.size()) {
+        
         const std::pair<int, int>& point = _pq.rbegin()->second;
         const cv::Point p (point.first, point.second);
         
         const auto& phi_p = patch (p, _modified);
         const int radius = (phi_p.rows - 1) / 2;
         
-        cv::Mat p_mask = patch (p, _mask);        
-        cv::Mat templateMask = (~p_mask);
+        cv::Mat p_mask = patch (p, _mask, radius);
+        const cv::Mat& invMask = ~p_mask;
+        
+        cv::Mat templateMask = (invMask);
         cv::Mat mergeArrays[3] = {templateMask, templateMask, templateMask};
         cv::merge(mergeArrays, 3, templateMask);
-        
-        cv::Mat res;
+
         cv::matchTemplate (_modified, phi_p, res, CV_TM_SQDIFF, templateMask);
         
-        std::cerr << "Points in contour : " << _pq.size() << std::endl;
-
+//         cv::Mat mean_p, var_p;
+//         cv::meanStdDev (phi_p, mean_p, var_p, invMask);
+        
         cv::Mat dilatedMask;
         cv::dilate (_mask, dilatedMask, cv::Mat(), cv::Point (-1, -1), radius);
+        
+//         cv::Mat mean_q, var_q;
+//         for (int i = radius; i < _cols - radius; ++i) {
+//             for (int j = radius; j < _rows - radius; ++j) {
+//                 
+//                 const cv::Point currentPoint (i, j);
+//                 const cv::Point& resPoint = currentPoint -
+//                                             cv::Point (radius, radius);
+//                 
+//                 if (dilatedMask.at<uchar> (currentPoint))
+//                     continue;
+//                 
+//                 cv::meanStdDev (patch (currentPoint, _modified, radius),
+//                                 mean_q, var_q, invMask);
+//                 
+//                 res.at<double> (resPoint) += _delta *
+//                                             std::pow (cv::norm (var_p - var_q), 2);
+//             }
+//         }
+        
+        std::cerr << "Points in contour : " << _pq.size() << std::endl;
         
         res.setTo (std::numeric_limits<float>::max(),
                    dilatedMask (cv::Range (radius, _rows - radius),
@@ -69,13 +98,13 @@ cv::Mat Criminisi::generate (void)
         
         const auto& phi_q = patch (q, _modified, radius);
         
-        cv::Mat PHI_p, PHI_q;
-        cv::resize (phi_p, PHI_p, cv::Size (100, 100));
-        cv::resize (phi_q, PHI_q, cv::Size (100, 100));
-        
-        cv::imshow ("phi_p", PHI_p);
-        cv::imshow ("phi_q", PHI_q);
-        
+//         cv::Mat PHI_p, PHI_q;
+//         cv::resize (phi_p, PHI_p, cv::Size (100, 100));
+//         cv::resize (phi_q, PHI_q, cv::Size (100, 100));
+//         
+//         cv::imshow ("phi_p", PHI_p);
+//         cv::imshow ("phi_q", PHI_q);
+//         
         phi_q.copyTo (phi_p, p_mask);
         
         cv::Mat confidencePatch = patch (p, _confidence);
@@ -87,9 +116,9 @@ cv::Mat Criminisi::generate (void)
         
         update_contour (p);
         
-        cv::imshow ("modified", _modified);
-        cv::imshow ("confidence", _confidence);
-        cv::waitKey (50);
+//         cv::imshow ("modified", _modified);
+//         cv::imshow ("confidence", _confidence);
+//         cv::waitKey (50);
     }
     
     std::cerr << "Completed" << std::endl;
@@ -293,11 +322,16 @@ double Criminisi::priority (const std::pair<int, int>& p)
     const int radius = (confidencePatch.rows - 1) / 2;
     const cv::Mat& p_mask = patch (point, _mask, radius);
     
-    cv::Mat maskedConfidence = cv::Mat::zeros (confidencePatch.size(), CV_64FC1);
+    cv::Mat maskedConfidence = cv::Mat::zeros (confidencePatch.size(),
+                                               CV_64FC1);
     confidencePatch.copyTo (maskedConfidence, p_mask == 0);
     
-    double confidence = cv::sum (maskedConfidence)[0] /
-                        confidencePatch.total();
+    const double confidence = (cv::sum (maskedConfidence)[0] /
+                               confidencePatch.total()) * (1 - _w) +
+                               _w;
+    
+//     const double confidence = (cv::sum (maskedConfidence)[0] /
+//                                confidencePatch.total());
     
     const cv::Point2f& normal = generate_normal (point, radius);
     
@@ -342,7 +376,8 @@ cv::Mat Criminisi::patch (const cv::Point& p, const cv::Mat& img)
 
 /*****************************************************************************/
 
-cv::Mat Criminisi::patch (const cv::Point& p, const cv::Mat& img, const int radius)
+cv::Mat Criminisi::patch
+(const cv::Point& p,const cv::Mat& img, const int radius)
 {
     return img  (cv::Range (p.y - radius, p.y + radius + 1),
                  cv::Range (p.x - radius, p.x + radius + 1));
