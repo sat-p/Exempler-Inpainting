@@ -67,7 +67,7 @@ cv::Mat Criminisi::generate (void)
         
         cv::merge(mergeArrays, 3, templateMask);
 
-        cv::matchTemplate (_modified, phi_p, resSSD, CV_TM_SQDIFF, templateMask);        
+        cv::matchTemplate (_modified, phi_p, resSSD, cv::TM_SQDIFF, templateMask);
         
         cv::dilate (_mask, dilatedMask, cv::Mat(), cv::Point (-1, -1), radius);
         

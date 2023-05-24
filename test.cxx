@@ -6,21 +6,23 @@
 
 #include <iostream>
 #include <chrono>
+#include <cstdlib>
 
 int main (int argc, char** argv)
 {
     std::chrono::steady_clock clk;
     auto begin = clk.now();
     
-    if (argc != 2) {
-    
-        std::cout << "Please input reference image path" << std::endl;
+    if (argc != 4) {
+        std::cout << "Usage <INPUT_IMAGE_PATH> <MASK_HEIGHT_PIXELS> <MASK_WIDTH_PIXELS>"
+                  << std::endl;
         return 0;
     }
 
     const auto& ref = cv::imread (argv[1]);
+
     cv::Mat lab_img;
-    cv::cvtColor (ref, lab_img, CV_BGR2Lab);
+    cv::cvtColor (ref, lab_img, cv::COLOR_BGR2Lab);
     
     const int N_ref = ref.rows * ref.cols;
     
@@ -35,8 +37,8 @@ int main (int argc, char** argv)
     
     Criminisi criminisi (lab_img);
     
-    const int x_size = ref.cols / 3;
-    const int y_size = ref.rows / 3;
+    const int x_size = std::atoi(argv[3]);
+    const int y_size = std::atoi(argv[2]);
     
     cv::Mat mask = cv::Mat::zeros (ref.rows, ref.cols, CV_8UC1);
     cv::Mat roi = mask (cv::Rect ((ref.cols - x_size) / 2,
@@ -49,8 +51,8 @@ int main (int argc, char** argv)
     const auto& res_lab = criminisi.generate();
     cv::Mat res;
     
-    cv::cvtColor (res_lab, res, CV_Lab2BGR);
-    
+    cv::cvtColor (res_lab, res, cv::COLOR_Lab2BGR);
+
     cv::imshow ("ref", ref);
 //     cv::imshow ("mask", mask);
     cv::imshow ("res", res);
